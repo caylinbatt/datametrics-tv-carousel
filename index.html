@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataMetrics · SAX</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy: #001842;
+      --blue: #23489A;
+      --bright: #065AF1;
+      --violet: #756CCA;
+      --white: #ffffff;
+      --off: #F4F7FC;
+      --muted: rgba(255,255,255,0.72);
+      --ink: #0B1B3A;
+      --slide-ms: 9000ms;
+      --fade-ms: 900ms;
+      --font-display: "Montserrat", system-ui, sans-serif;
+      --font-body: "Open Sans", "Montserrat", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--navy);
+      color: var(--white);
+      font-family: var(--font-display);
+      cursor: none;
+    }
+
+    body.show-cursor { cursor: default; }
+
+    .stage {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: var(--navy);
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity var(--fade-ms) ease, visibility 0s linear var(--fade-ms);
+      display: grid;
+      padding: 4.5vh 5.5vw;
+      overflow: hidden;
+      background: var(--navy);
+      z-index: 1;
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      z-index: 2;
+      transition: opacity var(--fade-ms) ease, visibility 0s linear 0s;
+    }
+
+    .slide::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 70% 55% at 85% 15%, rgba(6,90,241,0.28), transparent 60%),
+        radial-gradient(ellipse 50% 45% at 10% 90%, rgba(117,108,202,0.18), transparent 55%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .slide > * { position: relative; z-index: 1; }
+
+    .topbar {
+      position: absolute;
+      top: 3.2vh;
+      left: 5.5vw;
+      right: 5.5vw;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    .logo {
+      height: clamp(28px, 4.2vh, 48px);
+      width: auto;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,0.25));
+    }
+
+    .badge {
+      font-size: clamp(11px, 1.15vh, 14px);
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: rgba(255,255,255,0.7);
+    }
+
+    .progress {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 4px;
+      background: rgba(255,255,255,0.08);
+      z-index: 10;
+    }
+
+    .progress > span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--bright), var(--violet));
+      transition: width 80ms linear;
+    }
+
+    .dots {
+      position: absolute;
+      bottom: 2.4vh;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 0.55rem;
+      z-index: 10;
+    }
+
+    .dots button {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      border: 0;
+      background: rgba(255,255,255,0.28);
+      padding: 0;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+
+    .dots button.active {
+      width: 28px;
+      background: var(--white);
+    }
+
+    /* ——— shared type ——— */
+    .kicker {
+      font-size: clamp(12px, 1.35vh, 16px);
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: #8EB6FF;
+      margin-bottom: 1.4vh;
+    }
+
+    h1 {
+      font-family: var(--font-display);
+      font-size: clamp(42px, 7.2vh, 92px);
+      line-height: 1.05;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      max-width: 16ch;
+    }
+
+    h2 {
+      font-family: var(--font-display);
+      font-size: clamp(34px, 5.4vh, 68px);
+      line-height: 1.08;
+      font-weight: 750;
+      letter-spacing: -0.02em;
+      max-width: 18ch;
+    }
+
+    .lede {
+      margin-top: 2.2vh;
+      font-family: var(--font-body);
+      font-size: clamp(16px, 2.1vh, 26px);
+      line-height: 1.45;
+      color: var(--muted);
+      max-width: 34ch;
+      font-weight: 400;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-top: 3vh;
+      padding: 0.7rem 1.15rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.14);
+      font-size: clamp(13px, 1.5vh, 18px);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+
+    .tag .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4ADE80;
+      box-shadow: 0 0 0 4px rgba(74,222,128,0.2);
+    }
+
+    /* ——— layouts ——— */
+    .hero {
+      grid-template-columns: 1.05fr 0.95fr;
+      align-items: center;
+      gap: 4vw;
+      padding-top: 10vh;
+      padding-bottom: 8vh;
+    }
+
+    .hero-copy { padding-right: 2vw; }
+
+    .visual {
+      position: relative;
+      width: 100%;
+      height: auto;
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow:
+        0 30px 80px rgba(0,0,0,0.45),
+        0 0 0 1px rgba(255,255,255,0.08);
+      background: #0a1a3a;
+      justify-self: center;
+      align-self: center;
+    }
+
+    .visual img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* Frame matches screenshot proportions so UI fills the card */
+    .visual.dashboard {
+      aspect-ratio: 16 / 9;
+      width: min(100%, calc(70vh * 16 / 9));
+      max-height: 70vh;
+      background: #0B1224;
+    }
+
+    .visual.dashboard img {
+      object-fit: cover;
+      object-position: center center;
+      background: #0B1224;
+      padding: 0;
+    }
+
+    .visual.dashboard.fit-contain {
+      aspect-ratio: 16 / 9;
+    }
+
+    .visual.dashboard.fit-contain img {
+      object-fit: cover;
+      object-position: center center;
+      padding: 0;
+    }
+
+    .hero .visual.dashboard,
+    .feature .visual.dashboard,
+    .product .visual.dashboard {
+      width: min(100%, calc(66vh * 16 / 9));
+      max-height: 66vh;
+    }
+
+    .visual.float::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, transparent 55%, rgba(0,24,66,0.55));
+      pointer-events: none;
+    }
+
+    .glow-ring {
+      position: absolute;
+      width: 42vw;
+      height: 42vw;
+      right: -8vw;
+      top: 50%;
+      transform: translateY(-50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(6,90,241,0.35), transparent 65%);
+      filter: blur(10px);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* split feature */
+    .feature {
+      grid-template-columns: 1fr 1.15fr;
+      align-items: center;
+      gap: 4.5vw;
+      padding-top: 11vh;
+      padding-bottom: 8vh;
+    }
+
+    .feature.reverse {
+      grid-template-columns: 1.15fr 1fr;
+    }
+
+    .feature.reverse .feature-copy { order: 2; }
+    .feature.reverse .visual { order: 1; }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.7rem;
+      margin-top: 2.6vh;
+    }
+
+    .pill {
+      padding: 0.55rem 1rem;
+      border-radius: 999px;
+      background: rgba(6,90,241,0.18);
+      border: 1px solid rgba(142,182,255,0.28);
+      font-size: clamp(12px, 1.4vh, 16px);
+      font-weight: 600;
+      color: #D6E6FF;
+    }
+
+    /* three cards — hug content, no tall empty panels */
+    .cards-slide {
+      grid-template-rows: auto auto;
+      padding-top: 11vh;
+      padding-bottom: 8vh;
+      align-content: center;
+      gap: 3.5vh;
+    }
+
+    .cards-head { max-width: 40ch; margin-bottom: 0; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.6vw;
+      min-height: 0;
+      align-items: stretch;
+    }
+
+    .card {
+      background: linear-gradient(165deg, rgba(35,72,154,0.45), rgba(0,24,66,0.75));
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 24px;
+      padding: 3.4vh 2.2vw 3.6vh;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5vh;
+      min-height: 0;
+      height: auto;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::after {
+      content: "";
+      position: absolute;
+      width: 140px;
+      height: 140px;
+      right: -36px;
+      bottom: -36px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(6,90,241,0.35), transparent 70%);
+      pointer-events: none;
+    }
+
+    .icon {
+      width: clamp(48px, 5.5vh, 64px);
+      height: clamp(48px, 5.5vh, 64px);
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, var(--bright), var(--violet));
+      box-shadow: 0 12px 30px rgba(6,90,241,0.35);
+      flex-shrink: 0;
+      margin-bottom: 0.4vh;
+    }
+
+    .icon svg { width: 55%; height: 55%; fill: none; stroke: white; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+    .card h3 {
+      font-size: clamp(24px, 3.1vh, 36px);
+      font-weight: 700;
+      line-height: 1.15;
+      max-width: 14ch;
+    }
+
+    .card p {
+      font-family: var(--font-body);
+      font-size: clamp(15px, 1.85vh, 22px);
+      line-height: 1.45;
+      color: var(--muted);
+      max-width: 32ch;
+    }
+
+    /* product spotlight */
+    .product {
+      grid-template-columns: 0.9fr 1.1fr;
+      align-items: center;
+      gap: 4vw;
+      padding-top: 11vh;
+      padding-bottom: 8vh;
+    }
+
+    .product-name {
+      font-size: clamp(14px, 1.5vh, 18px);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #8EB6FF;
+      margin-bottom: 1vh;
+    }
+
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(3, auto);
+      gap: 1.4vw;
+      margin-top: 3.2vh;
+      width: fit-content;
+    }
+
+    .stat {
+      padding: 1.4vh 1.2vw;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      min-width: 8vw;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: clamp(18px, 2.4vh, 28px);
+      font-weight: 750;
+      margin-bottom: 0.3vh;
+    }
+
+    .stat span {
+      font-size: clamp(11px, 1.2vh, 14px);
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    /* audience grid */
+    .audience {
+      grid-template-rows: auto auto;
+      padding-top: 11vh;
+      padding-bottom: 8vh;
+      align-content: center;
+      gap: 3vh;
+    }
+
+    .audience-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      grid-template-rows: auto auto;
+      gap: 1.5vw;
+      min-height: 0;
+      height: auto;
+    }
+
+    .aud {
+      border-radius: 24px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background:
+        linear-gradient(145deg, rgba(35,72,154,0.55), rgba(0,24,66,0.85));
+      padding: 3.2vh 2.4vw;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 1.4vw;
+      align-items: center;
+      overflow: hidden;
+      position: relative;
+      min-height: 0;
+    }
+
+    .aud .mark {
+      width: clamp(54px, 7vh, 78px);
+      height: clamp(54px, 7vh, 78px);
+      border-radius: 20px;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      font-weight: 800;
+      font-size: clamp(16px, 2vh, 22px);
+      letter-spacing: 0.04em;
+      color: #BFD4FF;
+    }
+
+    .aud h3 {
+      font-size: clamp(22px, 2.8vh, 34px);
+      font-weight: 700;
+      margin-bottom: 0.8vh;
+    }
+
+    .aud p {
+      font-family: var(--font-body);
+      font-size: clamp(14px, 1.65vh, 20px);
+      line-height: 1.4;
+      color: var(--muted);
+      max-width: 34ch;
+    }
+
+    /* statement / close */
+    .statement {
+      place-items: center;
+      text-align: center;
+      padding: 10vh 8vw;
+    }
+
+    .statement .photo-panel {
+      background: var(--navy);
+    }
+
+    .statement h1,
+    .statement h2 {
+      max-width: 18ch;
+      margin-inline: auto;
+    }
+
+    .statement .lede {
+      margin-inline: auto;
+      max-width: 36ch;
+    }
+
+    .brand-lockup {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3vh;
+    }
+
+    .brand-lockup .logo {
+      height: clamp(48px, 7vh, 80px);
+    }
+
+    .rule {
+      width: 72px;
+      height: 3px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--bright), var(--violet));
+      margin: 2.2vh auto 0;
+    }
+
+    /* QR — supporting, never dominant */
+    .qr-card {
+      display: inline-flex;
+      align-items: center;
+      gap: 1.35vw;
+      margin-top: 3.2vh;
+      padding: 1.4vh 1.5vw 1.4vh 1.4vh;
+      border-radius: 22px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      text-align: left;
+      max-width: min(560px, 56vw);
+    }
+
+    .qr-card img {
+      width: clamp(150px, 14vw, 230px);
+      height: clamp(150px, 14vw, 230px);
+      border-radius: 18px;
+      flex-shrink: 0;
+      background: #fff;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.3);
+    }
+
+    .qr-card .qr-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35vh;
+      padding-right: 0.6vw;
+      min-width: 0;
+    }
+
+    .qr-card .qr-label {
+      font-size: clamp(12px, 1.35vh, 15px);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #8EB6FF;
+    }
+
+    .qr-card .qr-title {
+      font-size: clamp(18px, 2.3vh, 26px);
+      font-weight: 700;
+      line-height: 1.2;
+      color: var(--white);
+    }
+
+    .qr-card .qr-sub {
+      font-family: var(--font-body);
+      font-size: clamp(13px, 1.5vh, 17px);
+      line-height: 1.35;
+      color: var(--muted);
+    }
+
+    /* Corner QR on statement — sized to TV scan zone (bottom-right) */
+    .qr-corner {
+      position: absolute;
+      right: 4.5vw;
+      bottom: 4.2vh;
+      z-index: 4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.1vh;
+      width: clamp(200px, 17vw, 300px);
+      padding: 1.4vh 1.2vw 1.6vh;
+      border-radius: 22px;
+      background: rgba(0, 24, 66, 0.45);
+      border: 1px solid rgba(255,255,255,0.14);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-sizing: border-box;
+      pointer-events: none;
+    }
+
+    .qr-corner img {
+      width: clamp(160px, 14.5vw, 250px);
+      height: clamp(160px, 14.5vw, 250px);
+      border-radius: 18px;
+      background: #fff;
+      box-shadow:
+        0 14px 36px rgba(0,0,0,0.4),
+        0 0 0 1px rgba(255,255,255,0.12);
+    }
+
+    .qr-corner span {
+      font-size: clamp(11px, 1.3vh, 15px);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: rgba(255,255,255,0.88);
+      text-shadow: 0 2px 10px rgba(0,0,0,0.45);
+    }
+
+    .slide.statement.has-qr-corner .overlay-copy {
+      padding-bottom: 6vh;
+      padding-right: min(22vw, 340px);
+    }
+
+    /* light slide variant */
+    .slide.light {
+      background: var(--off);
+      color: var(--ink);
+    }
+
+    .slide.light::before {
+      background:
+        radial-gradient(ellipse 60% 50% at 90% 10%, rgba(6,90,241,0.12), transparent 55%),
+        radial-gradient(ellipse 45% 40% at 5% 95%, rgba(117,108,202,0.1), transparent 50%);
+    }
+
+    .slide.light .kicker { color: var(--blue); }
+    .slide.light .lede { color: rgba(11,27,58,0.7); }
+    .slide.light .badge { color: rgba(11,27,58,0.55); }
+    .slide.light .pill {
+      background: rgba(35,72,154,0.08);
+      border-color: rgba(35,72,154,0.18);
+      color: var(--blue);
+    }
+    .slide.light .card {
+      background: white;
+      border-color: rgba(0,24,66,0.08);
+      box-shadow: 0 18px 40px rgba(0,24,66,0.08);
+      color: var(--ink);
+    }
+    .slide.light .card p { color: rgba(11,27,58,0.65); }
+    .slide.light .tag {
+      background: rgba(35,72,154,0.06);
+      border-color: rgba(35,72,154,0.12);
+      color: var(--ink);
+    }
+
+    /* photo left full bleed accents */
+    .photo-panel {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+    }
+
+    .photo-panel img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: brightness(0.45) saturate(0.9);
+    }
+
+    .photo-panel::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(0,24,66,0.92) 0%, rgba(0,24,66,0.78) 42%, rgba(0,24,66,0.35) 100%),
+        linear-gradient(180deg, rgba(0,24,66,0.35), transparent 30%, rgba(0,24,66,0.55));
+    }
+
+    .overlay-copy {
+      z-index: 2;
+      align-self: center;
+      max-width: 42vw;
+      padding-left: 1vw;
+    }
+
+    /* data sources strip */
+    .sources {
+      display: flex;
+      gap: 0.8vw;
+      margin-top: 3vh;
+      flex-wrap: wrap;
+    }
+
+    .source {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.7rem 1rem;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      font-weight: 600;
+      font-size: clamp(13px, 1.45vh, 17px);
+    }
+
+    .source i {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      background: var(--bright);
+      display: inline-block;
+    }
+
+    /* subtle entrance when active */
+    .slide.active .rise {
+      animation: rise 0.9s ease both;
+    }
+    .slide.active .rise-d1 { animation-delay: 0.08s; }
+    .slide.active .rise-d2 { animation-delay: 0.16s; }
+    .slide.active .rise-d3 { animation-delay: 0.24s; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* pause indicator */
+    .paused-flag {
+      position: absolute;
+      top: 3.2vh;
+      right: 5.5vw;
+      z-index: 20;
+      font-size: 12px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      padding: 0.5rem 0.85rem;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.2);
+      display: none;
+      transform: translateY(4.2vh);
+    }
+    body.is-paused .paused-flag { display: block; }
+
+    .topbar { z-index: 15; }
+
+    @media (max-aspect-ratio: 4/3) {
+      .hero, .feature, .product { grid-template-columns: 1fr; }
+      .visual.dashboard {
+        width: min(100%, calc(42vh * 16 / 9));
+        max-height: 42vh;
+      }
+      .cards { grid-template-columns: 1fr; }
+      .audience-grid { grid-template-columns: 1fr; }
+      .overlay-copy { max-width: 80vw; }
+      .slide.statement.has-qr-corner .overlay-copy {
+        padding-right: 0;
+        padding-bottom: 22vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="topbar">
+      <img class="logo" src="assets/slide/sax-logo-white.png" alt="SAX" />
+      <div class="badge">DataMetrics</div>
+    </div>
+    <div class="paused-flag">Paused</div>
+
+    <!-- 1. HERO -->
+    <section class="slide active hero" data-slide>
+      <div class="glow-ring"></div>
+      <div class="hero-copy">
+        <div class="kicker rise">Technology</div>
+        <h1 class="rise rise-d1">Data Driven Decision Making</h1>
+        <p class="lede rise rise-d2">Proprietary analytics powering SAX consulting — faster insights when it matters most.</p>
+        <div class="tag rise rise-d3"><span class="dot"></span> Built for operators. Trusted by capital.</div>
+      </div>
+      <div class="visual dashboard rise rise-d2">
+        <img src="assets/slide/pulse-dashboard.png" alt="DataMetrics platform" />
+      </div>
+    </section>
+
+    <!-- 2. WHAT IS DATAMETRICS -->
+    <section class="slide feature" data-slide>
+      <div class="feature-copy">
+        <div class="kicker rise">The engine behind every engagement</div>
+        <h2 class="rise rise-d1">DataMetrics</h2>
+        <p class="lede rise rise-d2">Extracts ERP, Shopify, and Amazon data — transforms it into decision-ready analytics for Restructuring, Strategic Advisory, and Due Diligence.</p>
+        <div class="sources rise rise-d3">
+          <div class="source"><i></i> ERP</div>
+          <div class="source"><i style="background:#756CCA"></i> Shopify</div>
+          <div class="source"><i style="background:#4ADE80"></i> Amazon</div>
+        </div>
+      </div>
+      <div class="visual dashboard rise rise-d2">
+        <img src="assets/slide/pulse-dashboard.png" alt="DataMetrics dashboard" />
+      </div>
+    </section>
+
+    <!-- 3. THREE PILLARS -->
+    <section class="slide cards-slide" data-slide>
+      <div class="cards-head">
+        <div class="kicker rise">What sets it apart</div>
+        <h2 class="rise rise-d1">Precision. Clarity. Trust.</h2>
+      </div>
+      <div class="cards">
+        <article class="card rise rise-d1">
+          <div class="icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16V10"/><path d="M12 16V7"/><path d="M16 16v-4"/></svg>
+          </div>
+          <h3>Industry-Specific Intelligence</h3>
+          <p>In-house models built on decades of consumer brand experience — not generic off-the-shelf tools.</p>
+        </article>
+        <article class="card rise rise-d2">
+          <div class="icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="13" width="7" height="7" rx="1.5"/><rect x="14" y="13" width="7" height="7" rx="1.5"/></svg>
+          </div>
+          <h3>Tailored Dashboards</h3>
+          <p>SKU profitability, channel performance, inventory valuation — insights that match how the business actually runs.</p>
+        </article>
+        <article class="card rise rise-d3">
+          <div class="icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3l7 4v5c0 5-3.5 8.5-7 9-3.5-.5-7-4-7-9V7l7-4z"/><path d="M9.5 12.5l1.8 1.8 3.4-3.6"/></svg>
+          </div>
+          <h3>Secure &amp; Scalable</h3>
+          <p>Cloud-hosted ingestion with encryption and strict access controls — safe, current, always within reach.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- 4. DASHBOARDS FEATURE -->
+    <section class="slide feature reverse" data-slide>
+      <div class="feature-copy">
+        <div class="kicker rise">Real insights, not noise</div>
+        <h2 class="rise rise-d1">Dashboards built around the business</h2>
+        <p class="lede rise rise-d2">Flexible analytics on proven industry patterns — fully customized to each company’s model, priorities, and reporting needs.</p>
+        <div class="pill-row rise rise-d3">
+          <span class="pill">SKU profitability</span>
+          <span class="pill">Channel performance</span>
+          <span class="pill">Inventory valuation</span>
+          <span class="pill">Margin health</span>
+        </div>
+      </div>
+      <div class="visual dashboard fit-contain rise rise-d2">
+        <img src="assets/slide/product-pulse-alt.png" alt="Custom analytics dashboard" />
+      </div>
+    </section>
+
+    <!-- 5. PULSE -->
+    <section class="slide product" data-slide>
+      <div>
+        <div class="product-name rise">Product</div>
+        <h2 class="rise rise-d1">DataMetrics Pulse</h2>
+        <p class="lede rise rise-d2">Rapid, high-impact analytics — no ERP integration required. Immediate value for companies and lenders.</p>
+        <div class="stat-row rise rise-d3">
+          <div class="stat"><strong>Fast</strong><span>Time to insight</span></div>
+          <div class="stat"><strong>Zero</strong><span>ERP required</span></div>
+          <div class="stat"><strong>Both</strong><span>Ops &amp; capital</span></div>
+        </div>
+      </div>
+      <div class="visual dashboard rise rise-d2">
+        <img src="assets/slide/pulse-dashboard.png" alt="DataMetrics Pulse" />
+      </div>
+    </section>
+
+    <!-- 6. ERP -->
+    <section class="slide product" data-slide>
+      <div>
+        <div class="product-name rise">Product</div>
+        <h2 class="rise rise-d1">ERP Connector</h2>
+        <p class="lede rise rise-d2">Direct ERP integration. Sophisticated analytics delivered through clear dashboards and reports — in real time.</p>
+        <div class="pill-row rise rise-d3">
+          <span class="pill">Live connection</span>
+          <span class="pill">Deep analytics</span>
+          <span class="pill">Operator-ready</span>
+        </div>
+      </div>
+      <div class="visual dashboard fit-contain rise rise-d2">
+        <img src="assets/slide/product-erp.png" alt="DataMetrics ERP Connector" />
+      </div>
+    </section>
+
+    <!-- 7. DTC -->
+    <section class="slide product" data-slide>
+      <div>
+        <div class="product-name rise">Product</div>
+        <h2 class="rise rise-d1">DataMetrics DTC</h2>
+        <p class="lede rise rise-d2">Shopify + digital marketing in one view. Orders, inventory, and campaigns — Google, Meta, TikTok — no complex setup.</p>
+        <div class="sources rise rise-d3">
+          <div class="source"><i></i> Shopify</div>
+          <div class="source"><i style="background:#1877F2"></i> Meta</div>
+          <div class="source"><i style="background:#EA4335"></i> Google</div>
+          <div class="source"><i style="background:#000"></i> TikTok</div>
+        </div>
+      </div>
+      <div class="visual dashboard fit-contain rise rise-d2">
+        <img src="assets/slide/product-dtc.png" alt="DataMetrics DTC" />
+      </div>
+    </section>
+
+    <!-- 8. AMAZON -->
+    <section class="slide product" data-slide>
+      <div>
+        <div class="product-name rise">Product</div>
+        <h2 class="rise rise-d1">DataMetrics Amazon</h2>
+        <p class="lede rise rise-d2">Clarity for Amazon 3P. Connect in minutes — profitability, fees, inventory, and a daily Amazon P&amp;L in one place.</p>
+        <div class="stat-row rise rise-d3">
+          <div class="stat"><strong>3P</strong><span>Seller focus</span></div>
+          <div class="stat"><strong>Live</strong><span>P&amp;L view</span></div>
+          <div class="stat"><strong>Minutes</strong><span>To connect</span></div>
+        </div>
+      </div>
+      <div class="visual dashboard fit-contain rise rise-d2">
+        <img src="assets/slide/product-amazon.png" alt="DataMetrics Amazon" />
+      </div>
+    </section>
+
+    <!-- 9. WHO USES -->
+    <section class="slide audience" data-slide>
+      <div style="margin-bottom: 2.5vh;">
+        <div class="kicker rise">Who uses DataMetrics</div>
+        <h2 class="rise rise-d1">One platform. Four lenses.</h2>
+      </div>
+      <div class="audience-grid">
+        <div class="aud rise rise-d1">
+          <div class="mark">SAX</div>
+          <div>
+            <h3>SAX Teams</h3>
+            <p>Every turnaround, strategic initiative, and diligence sprint — faster diagnostics, sharper recommendations.</p>
+          </div>
+        </div>
+        <div class="aud rise rise-d2">
+          <div class="mark">DTC</div>
+          <div>
+            <h3>Wholesale &amp; DTC Brands</h3>
+            <p>Real-time visibility into inventory, margins, supply chain, and sales trends.</p>
+          </div>
+        </div>
+        <div class="aud rise rise-d2">
+          <div class="mark">CAP</div>
+          <div>
+            <h3>Lenders &amp; Capital</h3>
+            <p>Monitor portfolios, validate reporting, assess risk with clean, timely analytics.</p>
+          </div>
+        </div>
+        <div class="aud rise rise-d3">
+          <div class="mark">AMZ</div>
+          <div>
+            <h3>Amazon Sellers</h3>
+            <p>Inventory health, margin performance, and operational clarity — protect profitability in real time.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10. STATEMENT -->
+    <section class="slide statement has-qr-corner" data-slide>
+      <div class="photo-panel">
+        <img src="assets/slide/set-apart-2.jpg" alt="" />
+      </div>
+      <div class="overlay-copy brand-lockup" style="max-width:none;">
+        <div class="kicker rise">The DataMetrics difference</div>
+        <h1 class="rise rise-d1">Built for operators.<br/>Trusted by capital.</h1>
+        <div class="rule rise rise-d2"></div>
+        <p class="lede rise rise-d3" style="margin-top:2.4vh;">Transparency, trust, and timely decisions — when it matters most.</p>
+      </div>
+      <div class="qr-corner rise rise-d3" aria-label="Scan to contact SAX">
+        <img src="assets/slide/qr-contact.png" alt="QR code to contact form" />
+        <span>Scan to connect</span>
+      </div>
+    </section>
+
+    <!-- 11. CLOSE -->
+    <section class="slide statement" data-slide data-dwell="12000">
+      <div class="brand-lockup">
+        <img class="logo rise" src="assets/slide/sax-logo-white.png" alt="SAX" style="height: clamp(48px, 6.5vh, 72px);" />
+        <div class="rule rise rise-d1" style="margin-top:0;"></div>
+        <h2 class="rise rise-d1" style="max-width: 14ch; margin-top: 0.5vh;">DataMetrics</h2>
+        <p class="lede rise rise-d2" style="margin-top:1.2vh;">The proprietary technology engine behind SAX consulting.</p>
+        <div class="qr-card rise rise-d3" aria-label="Scan to open contact form">
+          <img src="assets/slide/qr-contact.png" alt="QR code linking to Unlock Your Business Potential contact form" />
+          <div class="qr-copy">
+            <div class="qr-label">Get in touch</div>
+            <div class="qr-title">Unlock your business potential</div>
+            <div class="qr-sub">Scan to open the contact form</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="progress" aria-hidden="true"><span id="bar"></span></div>
+    <div class="dots" id="dots" aria-label="Slides"></div>
+  </div>
+
+  <script>
+    (function () {
+      const SLIDE_MS = 9000;
+      const slides = Array.from(document.querySelectorAll("[data-slide]"));
+      const bar = document.getElementById("bar");
+      const dotsWrap = document.getElementById("dots");
+      let index = 0;
+      let paused = false;
+      let started = performance.now();
+      let elapsedBeforePause = 0;
+      let cursorTimer;
+
+      function dwellFor(i) {
+        const raw = slides[i] && slides[i].getAttribute("data-dwell");
+        const n = raw ? parseInt(raw, 10) : SLIDE_MS;
+        return Number.isFinite(n) && n > 0 ? n : SLIDE_MS;
+      }
+
+      slides.forEach((_, i) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("aria-label", "Go to slide " + (i + 1));
+        if (i === 0) b.classList.add("active");
+        b.addEventListener("click", () => goTo(i, true));
+        dotsWrap.appendChild(b);
+      });
+      const dots = Array.from(dotsWrap.children);
+
+      function paint() {
+        slides.forEach((s, i) => s.classList.toggle("active", i === index));
+        dots.forEach((d, i) => d.classList.toggle("active", i === index));
+      }
+
+      function goTo(i, resetClock) {
+        index = (i + slides.length) % slides.length;
+        paint();
+        if (resetClock) {
+          started = performance.now();
+          elapsedBeforePause = 0;
+          bar.style.width = "0%";
+        }
+      }
+
+      function next() { goTo(index + 1, true); }
+      function prev() { goTo(index - 1, true); }
+
+      function togglePause() {
+        paused = !paused;
+        document.body.classList.toggle("is-paused", paused);
+        if (paused) {
+          elapsedBeforePause = performance.now() - started;
+        } else {
+          started = performance.now() - elapsedBeforePause;
+        }
+      }
+
+      function tick(now) {
+        if (!paused) {
+          const t = now - started;
+          const dur = dwellFor(index);
+          const p = Math.min(1, t / dur);
+          bar.style.width = (p * 100).toFixed(2) + "%";
+          if (p >= 1) next();
+        }
+        requestAnimationFrame(tick);
+      }
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowRight" || e.key === "PageDown") next();
+        else if (e.key === "ArrowLeft" || e.key === "PageUp") prev();
+        else if (e.key === " " || e.key === "k") { e.preventDefault(); togglePause(); }
+        else if (e.key === "f") {
+          if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+          else document.exitFullscreen().catch(() => {});
+        }
+        else if (e.key === "Home") goTo(0, true);
+        else if (e.key === "End") goTo(slides.length - 1, true);
+      });
+
+      // optional click zones: left 20% prev, right 20% next
+      document.getElementById("stage").addEventListener("click", (e) => {
+        if (e.target.closest(".dots")) return;
+        const x = e.clientX / window.innerWidth;
+        if (x < 0.18) prev();
+        else if (x > 0.82) next();
+      });
+
+      function showCursor() {
+        document.body.classList.add("show-cursor");
+        clearTimeout(cursorTimer);
+        cursorTimer = setTimeout(() => document.body.classList.remove("show-cursor"), 1800);
+      }
+      window.addEventListener("mousemove", showCursor);
+
+      // auto fullscreen hint via query ?fs=1
+      if (new URLSearchParams(location.search).has("fs")) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+
+      paint();
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>
